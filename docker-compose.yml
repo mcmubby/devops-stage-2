@@ -1,0 +1,73 @@
+version: '3.7'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    networks:
+      - app_network
+
+  backend:
+    image: ${DOCKER_REGISTRY-}backend
+    container_name: backend
+    ports:
+      - 8000:8000
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - ./backend/.env
+    networks:
+      - app_network
+
+  db:
+    image: postgres:latest
+    container_name: db
+    env_file:
+      - ./backend/.env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ./.containers/db:/var/lib/postgresql/data
+    networks:
+      - app_network
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    networks:
+      - app_network
+
+  proxy:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    ports:
+      - "8090:81"
+      - "80:80"
+      - "443:443"
+    networks:
+      - app_network
+    depends_on:
+      - db
+      - frontend
+      - backend
+
+networks:
+  app_network:
+    driver: bridge
